@@ -63,7 +63,7 @@ def login():
     r = session.get(url)
     url = 'https://logentries.com/login/ajax/'
     loginpacket = {}
-    loginpacket['csrfmiddlewaretoken'] = session.cookies.get('csrftoken')
+    loginpacket['csrfmiddlewaretoken'] = get_unique_cookie('csrftoken')
     loginpacket['ajax'] = "1"
     loginpacket['next'] = "%2Fapp%2F"
     loginpacket['username'] = raw_input('Logentries username: ')
@@ -92,6 +92,9 @@ def get_data():
         print "Obtaining appid and user key..."
         try:
             session.cookies.clear(domain='', path='/', name='csrftoken')
+        except:
+            pass
+        try:
             r = session.get(url, headers=headers, timeout=5)
         except Exception as e:
             print "Error: %s" % e
@@ -111,6 +114,15 @@ def get_data():
     return data
 
 
+def get_unique_cookie(cookie):
+    global session
+    try:
+        return session.cookies.get(cookie)
+    except requests.cookies.CookieConflictError:
+        print "removing duplicate cookie"
+        session.cookies.clear(domain='', path='/', name=cookie)
+    return session.cookies.get(cookie)
+
 
 def enable_tail(sources, user_key, appid):
     global session
@@ -124,7 +136,7 @@ def enable_tail(sources, user_key, appid):
         data['sources'] = sources
         data['user_key'] = user_key
         headers = {}
-        headers['X-CSRFToken'] = session.cookies.get('csrftoken')
+        headers['X-CSRFToken'] = get_unique_cookie('csrftoken')
         headers['Referer'] = "https://logentries.com/app/%s" % appid
         headers['Origin'] = 'https://logentries.com'
         headers['Pragma'] = 'no-cache'
@@ -153,7 +165,7 @@ def tail(sources, appid, epochnow, from_sn=0, search=''):
     data['from'] = epochnow
     data['to'] = '-1'
     headers = {}
-    headers['X-CSRFToken'] = session.cookies.get('csrftoken')
+    headers['X-CSRFToken'] = get_unique_cookie('csrftoken')
     headers['Referer'] = "https://logentries.com/app/%s" % appid
     headers['Origin'] = 'https://logentries.com'
     headers['Pragma'] = 'no-cache'
@@ -161,8 +173,11 @@ def tail(sources, appid, epochnow, from_sn=0, search=''):
     if r.status_code is not 200:
       print "Bad return code %s" % r.status_code
       sys.exit(1)
-    ledata = json.loads(r.text)
-    return ledata
+    try:
+        ledata = json.loads(r.text)
+        return ledata
+    except ValueError:
+        print "Data not in JSON format: %d '%s'" % ( len(r.text), r.text)
 
 
 @click.command()
